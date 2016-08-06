@@ -1,0 +1,129 @@
+---
+title: "Assignment: Prediction Assignment Writeup"
+author: "Fernanda Melo"
+date: "6 de Agosto de 2016"
+output: html_document
+---
+
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. We were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+##Data 
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+
+
+The goal of this assignment is to predict the manner in which they did the exercise. This assignment will:
+
+a.create a report describing how the model is built
+
+b.how cross validation is use
+
+c.what is the expected out of sample error and why we made the choices we did
+
+d.use prediction model to predict 20 different test cases
+
+
+
+Once downloaded to our working directory, we read in the file to perform some basic exploratory data analysis. We notice there are many blanks and NA values (I do not show here in the interest of space), so I shall re-read the file so that all non-valid entries (blanks, DIV/0, NA), are read in as NA in R. I continue to examine and remove columns which contain NA's, as well as remove columns which I do not believe have any outcome on the class.
+
+
+
+```{r}
+datatraining=read.csv('pml-training.csv',na.strings=c('','NA','#DIV/0!'))
+datatraining=datatraining[,apply(datatraining,2,function(x) !any(is.na(x)) )]
+datatraining=datatraining[,-c(1:7)]
+
+names(datatraining)
+```
+
+This leave us with 19622 observations and 53 predictors (one of which is the response variable)
+
+To continue with the analysis we download the necessary packages
+
+```{r,results='hide', warning=FALSE, message=FALSE}
+library(randomForest)
+library(caret)
+library(e1071)
+library(rpart.plot)
+library(rattle)
+library(gbm)
+```
+
+For cross validation, We split our testing data into sub groups, 75% for training 25% for testing
+
+```{r}
+set.seed(12345)
+subGrps=createDataPartition(y=datatraining$classe, p=0.75, list=FALSE)
+subTraining=datatraining[subGrps,]
+subTesting=datatraining[-subGrps, ]
+dim(subTraining);dim(subTesting)
+```
+
+We see there are 14718 observations in the subTraining group, and 4904 in the subTesting group.
+
+##Prediction Model Building
+
+#### A. Decision Tree
+
+```{r}
+set.seed(12345)
+modelRPART <- train(classe ~ .,method='rpart',data=subTraining)
+fancyRpartPlot(modelRPART $finalModel) 
+predRPART=predict(modelRPART,newdata=subTesting)
+confusionMatrix(predRPART,subTesting$classe)
+```
+
+####B. Generalized Boosted Model (GBM)
+
+```{r}
+set.seed(12345)
+fitControl<-trainControl(method="cv", number=5, allowParallel=T, verbose=T)
+modelGBM=train(classe~., method='gbm',data=subTraining, trControl=fitControl,verbose=FALSE)
+predGBM=predict(modelGBM,newdata=subTesting)
+confusionMatrix(predGBM,subTesting$classe)
+```
+
+####C. Random Forest
+
+```{r}
+set.seed(12345)
+modelRF=randomForest(classe~., data=subTraining, method='class')
+predRF=predict(modelRF,subTesting, type='class')
+confusionMatrix(predRF,subTesting$classe)
+```
+
+
+## Applying the selected Model to the Test Data
+
+The accuracy of the 3 regression modeling methods above are:
+Decision Tree:0.54; GBM:0.96; Random Forest:0.99
+In that case, the Random Forest model will be applied to predict the 20 quiz results (testing dataset) as shown below.
+
+
+```{r}
+datatest=read.csv('pml-testing.csv',na.strings=c('','NA','#DIV/0!'))
+datatest=datatest[,apply(datatest,2,function(x) !any(is.na(x)) )]
+datatest=datatest[,-c(1:7)]
+
+predicted=predict(modelRF,datatest,type='class')
+```
+
+####The final prediction for the 20 ends up as:
+
+
+```{r}
+predicted
+```
+
